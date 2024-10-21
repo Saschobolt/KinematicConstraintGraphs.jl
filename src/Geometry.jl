@@ -2,7 +2,7 @@
 # indices of linear independent columns of a matrix
 function indcols_indices(A::AbstractMatrix{<:Real}; atol::Real=1e-8)
     Q, R, perm = qr(A, ColumnNorm())
-    indices = perm[findall(val -> abs(val) > atol, diag(R))]
+    indices = sort(perm[findall(val -> abs(val) > atol, diag(R))])
     return indices
 end
 
