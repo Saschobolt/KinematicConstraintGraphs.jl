@@ -82,7 +82,7 @@ end
 # basis of the GeometricSpan, i.e. the points that span the GeometricSpan, i.e. the points that corresponds to the generators of the col space of the matrix of the GeometricSpan
 function basis(s::AbstractGeometricSpan)
     basis_mat = indcols(matrix(s))[1:end-1, :]
-    return [Point(basis_mat[:, i]) for i in 1:size(basis_mat, 2)]
+    return [Point(basis_mat[:, i]) for i in axes(basis_mat, 2)]
 end
 
 # basis of the translation space of the AbstractGeometricSpan{N} s. Result is a N x dim(s) - matrix with last row equal to zero.
@@ -92,7 +92,7 @@ function basis_translation_space(s::AbstractGeometricSpan{N,T}) where {N,T<:Real
     end
 
     mat_points = matrix(s)
-    mat_translations = hcat([mat_points[:, i] - mat_points[:, 1] for i in 2:size(mat_points, 2)]...)
+    mat_translations = hcat([mat_points[:, i] - mat_points[:, 1] for i in axes(mat_points, 2)[2:end]]...)
     return indcols(mat_translations[1:end-1, :])
 end
 
@@ -141,7 +141,7 @@ function intersection(s1::AbstractGeometricSpan, s2::AbstractGeometricSpan)
 
     # points that span the intersection can be computed by taking the first point in the solution and translating this point with translations corresponding to basis elements in the nullspace of A (columns of n).
     p = p1 + t1 * sol[1:d1]
-    points = [Point(p), [Point(p1 + t1 * (sol[1:d1] + n[1:d1, i])) for i in 1:size(n, 2)]...]
+    points = [Point(p), [Point(p1 + t1 * (sol[1:d1] + n[1:d1, i])) for i in axes(n, 2)]...]
     return GeometricSpan(points)
 end
 
