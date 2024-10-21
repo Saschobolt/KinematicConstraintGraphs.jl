@@ -37,6 +37,11 @@ end
 Base.convert(::Type{Point{N,T}}, p::Point{M,S}) where {M,N,T<:Real,S<:Real} = Point{N,T}(p.coords)
 Base.promote_rule(::Type{Point{N,T}}, ::Type{Point{N,S}}) where {N,T<:Real,S<:Real} = Point{N,promote_type(T, S)}
 
+# translating point by vector using +
+Base.:+(p::Point, v::AbstractVector) = Point(p.coords + v)
+Base.:+(v::AbstractVector, p::Point) = p + v
+Base.:-(p::Point, v::AbstractVector) = p + (-v)
+
 Base.length(p::Point) = length(p.coords)
 
 ############ span of points
