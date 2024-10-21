@@ -41,6 +41,7 @@ Base.promote_rule(::Type{Point{N,T}}, ::Type{Point{N,S}}) where {N,T<:Real,S<:Re
 Base.:+(p::Point, v::AbstractVector) = Point(p.coords + v)
 Base.:+(v::AbstractVector, p::Point) = p + v
 Base.:-(p::Point, v::AbstractVector) = p + (-v)
+Base.:-(p::Point, q::Point) = p.coords - q.coords
 
 Base.length(p::Point) = length(p.coords)
 
