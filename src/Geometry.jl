@@ -168,7 +168,7 @@ Line(points...) = Line(GeometricSpan(points...))
 
 ############ plane
 mutable struct Plane{N,T<:Real} <: AbstractGeometricSpan{N,T}
-    point::SVector{3,Point{N,T}}
+    points::SVector{3,Point{N,T}}
 end
 
 function Plane(s::AbstractGeometricSpan)
@@ -180,3 +180,49 @@ end
 
 Plane(points) = Plane(GeometricSpan(points))
 Plane(points...) = Plane(GeometricSpan(points...))
+
+function normal_vec(p::Plane)
+    v1 = p.points[2] - p.points[1]
+    v2 = p.points[3] - p.points[1]
+
+    return normalize(cross(v1, v2))
+end
+
+
+
+############ orthogonal, colinear and parallel
+function orthogonal(l::Line{N}, p::Plane{N}) where {N}
+    v = l.points[2] - l.points[1]
+    x1 = p.points[2] - p.points[1]
+    x2 = p.points[3] - p.points[1]
+
+    return isapprox(dot(v, x1), 0, atol=eps(Float64)) && isapprox(dot(v, x2), 0, atol=eps(Float64))
+end
+
+orthogonal(p::Plane{N}, l::Line{N}) where {N} = orthogonal(l, p)
+
+function parallel(l1::Line{N}, l2::Line{N}) where {N}
+    v1 = l1.points[2] - l1.points[1]
+    v2 = l2.points[2] - l2.points[1]
+
+    return size(nullspace(hcat(v1, v2)), 2) > 0
+end
+
+function parallel(l::Line{N}, p::Plane{N}) where {N}
+    v = l.points[2] - l.points[1]
+    v1 = p.points[2] - p.points[1]
+    v2 = p.points[3] - p.points[1]
+
+    return size(nullspace(hcat(v, v1, v2)), 2) > 0
+end
+
+parallel(p::Plane{N}, l::Line{N}) where {N} = parallel{l,p}
+
+function parallel(p1::Plane{N}, p2::Plane{N}) where {N}
+    v1 = p1.points[2] - p1.points[1]
+    v2 = p1.points[3] - p1.points[1]
+    w1 = p2.points[2] - p2.points[1]
+    w2 = p2.points[3] - p2.points[1]
+
+    return size(nullspace(hcat(v1, v2, w1, w2)), 2) >= 2
+end
