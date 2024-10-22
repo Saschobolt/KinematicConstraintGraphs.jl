@@ -43,6 +43,11 @@ Base.:+(v::AbstractVector, p::Point) = p + v
 Base.:-(p::Point, v::AbstractVector) = p + (-v)
 Base.:-(p::Point, q::Point) = p.coords - q.coords
 
+# Point comparison
+function Base.:(==)(p::Point, q::Point)
+    return p.coords == q.coords
+end
+
 Base.length(p::Point) = length(p.coords)
 
 ############ span of points
