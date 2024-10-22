@@ -75,6 +75,28 @@ function GeometricSpan(points...)
 
     return GeometricSpan(collect(points))
 end
+
+function Base.:(==)(s1::AbstractGeometricSpan, s2::AbstractGeometricSpan)
+    d = dim(s1)
+
+    if dim(s1) != dim(s2)
+        return false
+    end
+
+    if d == 0 # both spans are just points
+        return s1.points[1].coords == s2.points[1].coords
+    end
+
+    p = s1.points[1]
+
+    if !(p in s2)
+        return false
+    end
+
+    # if dimension of span of translation spaces is d and they share a point, then they are equal.
+    return size(nullspace(hcat(basis_translation_space(s1), basis_translation_space(s2))), 2) == d
+end
+
 function matrix(s::AbstractGeometricSpan{N,T}) where {N,T<:Real}
     mat = hcat([point.coords for point in s.points]...)
     mat = vcat(mat, ones(1, size(mat, 2)))
@@ -196,7 +218,7 @@ function orthogonal(l::Line{N}, p::Plane{N}) where {N}
     x1 = p.points[2] - p.points[1]
     x2 = p.points[3] - p.points[1]
 
-    return isapprox(dot(v, x1), 0, atol=eps(Float64)) && isapprox(dot(v, x2), 0, atol=eps(Float64))
+    return isapprox(dot(v, x1), 0, atol=eps(typeof(dot(v, x1)))) && isapprox(dot(v, x2), 0, atol=eps(typeof(dot(v, x2))))
 end
 
 orthogonal(p::Plane{N}, l::Line{N}) where {N} = orthogonal(l, p)
