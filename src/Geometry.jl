@@ -223,10 +223,17 @@ function orthogonal(l::Line{N}, p::Plane{N}) where {N}
     x1 = p.points[2] - p.points[1]
     x2 = p.points[3] - p.points[1]
 
-    return isapprox(dot(v, x1), 0, atol=eps(typeof(dot(v, x1)))) && isapprox(dot(v, x2), 0, atol=eps(typeof(dot(v, x2))))
+    return isapprox(dot(v, x1), 0.0, atol=eps(Float64)) && isapprox(dot(v, x2), 0, atol=eps(Float64))
 end
 
 orthogonal(p::Plane{N}, l::Line{N}) where {N} = orthogonal(l, p)
+
+function orthogonal(l1::Line{N}, l2::Line{N}) where {N}
+    v1 = l1.points[2] - l1.points[1]
+    v2 = l2.points[2] - l2.points[1]
+
+    return isapprox(dot(v1, v2), 0.0, atol=eps(Float64))
+end
 
 function parallel(l1::Line{N}, l2::Line{N}) where {N}
     v1 = l1.points[2] - l1.points[1]
