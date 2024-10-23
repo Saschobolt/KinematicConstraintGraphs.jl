@@ -43,7 +43,7 @@ All subtypes of AbstractDisplacementGroup must have the following fields:
 - defining_object<:Union{Nothing, AbstractGeometricObject{N}}: object that defines the group. E.g. for translational group along a plane in R^3, defining_object is the defining line
 """
 abstract type AbstractDisplacementGroup{N,T<:Real} <: AbstractAlgebra.Group end
-abstract type Abstract3dDisplacementGroup{T<:Real} <: AbstractDisplacementGroup{3,T} end
+Abstract3dDisplacementGroup{T<:Real} = AbstractDisplacementGroup{3,T}
 
 # identity group
 struct IdentityGroup{N,T<:Real} <: AbstractDisplacementGroup{N,T}
@@ -165,11 +165,11 @@ struct SpatialTranslationGroup{T<:Real} <: Abstract3dDisplacementGroup{T}
     function SpatialTranslationGroup{T}() where {T<:Real}
         d = 3
         dof = 3
-        new{T}(d, dof, nothing)
+        return new{T}(d, dof, nothing)
     end
 end
 
-SpatialTranslationGroup() = SpatialTranslationGroup{Float64}
+SpatialTranslationGroup() = SpatialTranslationGroup{Float64}()
 
 # Planar sliding (E) Plane
 struct PlanarSlidingGroup{T<:Real} <: Abstract3dDisplacementGroup{T}
@@ -230,12 +230,96 @@ struct TranslatingGimbalGroup{T<:Real} <: Abstract3dDisplacementGroup{T}
     end
 end
 
-######## subgroup relations among displacement groups
-
 TranslatingGimbalGroup(p1::Point{3}, p2::Point{3}) = TranslatingGimbalGroup(Line(p1, p2))
 TranslatingGimbalGroup(p::Point{3}, v::AbstractVector) = TranslatingGimbalGroup(Line(p, p + v))
 
+######## subgroup relations among displacement groups
 
+function is_subgroup(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacementGroup)
+    if G1.dof > G2.dof
+        return false
+    end
+
+    if typeof(G2) <: SpecialEuclideanGroup
+        return true
+    end
+
+    if typeof(G1) <: PrismaticGroup
+        if typeof(G2) <: PlanarTranslationGroup
+            return parallel(G1.defining_object, G2.defining_object)
+        elseif typeof(G2) <: CylindricalGroup
+            return parallel(G1.defining_object, G2.defining_object)
+        elseif typeof(G2) <: SpatialTranslationGroup
+            return true
+        elseif typeof(G2) <: PlanarSlidingGroup
+            return parallel(G1.defining_object, G2.defining_object)
+        elseif typeof(G2) <: TranslatingScrewGroup
+            return orthogonal(G1.defining_object, G2.defining_object)
+        elseif typeof(G2) <: TranslatingGimbalGroup
+            return true
+        end
+    elseif typeof(G1) <: RevolutionGroup
+        if typeof(G2) <: CylindricalGroup
+            return parallel(G1.defining_object, G2.defining_object)
+        elseif typeof(G2) <: PlanarSlidingGroup
+            return orthogonal(G1.defining_object, G2.defining_object)
+        elseif typeof(G2) <: SphericalRotationGroup
+            return (G2.defining_object in G1.defining_object)
+        elseif typeof(G2) <: TranslatingGimbalGroup
+            return parallel(G1.defining_object, G2.defining_object)
+        end
+    elseif typeof(G1) <: ScrewGroup
+        if typeof(G2) <: CylindricalGroup
+            return parallel(G1.defining_object, G2.defining_object)
+        elseif typeof(G2) <: TranslatingScrewGroup
+            return (G1.defining_object == G2.defining_object) && G1.pitch == G2.pitch
+        elseif typeof(G2) <: TranslatingGimbalGroup
+            return parallel(G1.defining_object, G2.defining_object)
+        end
+    elseif typeof(G1) <: PlanarTranslationGroup
+        if typeof(G2) <: SpatialTranslationGroup
+            return true
+        elseif typeof(G2) <: PlanarSlidingGroup
+            return parallel(G1.defining_object, G2.defining_object)
+        elseif typeof(G2) <: TranslatingScrewGroup
+            return orthogonal(G1.defining_object, G2.defining_object)
+        elseif typeof(G2) <: TranslatingGimbalGroup
+            return true
+        end
+    elseif typeof(G1) <: CylindricalGroup
+        if typeof(G2) <: TranslatingGimbalGroup
+            return parallel(G1.defining_object, G2.defining_object)
+        end
+    elseif typeof(G1) <: SpatialTranslationGroup
+        if typeof(G2) <: TranslatingGimbalGroup
+            return true
+        end
+    elseif typeof(G1) <: PlanarSlidingGroup
+        if typeof(G2) <: TranslatingGimbalGroup
+            return orthogonal(G1.defining_object, G2.defining_object)
+        end
+    elseif typeof(G1) <: SphericalRotationGroup
+        return false
+    elseif typeof(G1) <: TranslatingScrewGroup
+        if typeof(G2) <: TranslatingGimbalGroup
+            return parallel(G1.defining_object, G2.defining_object)
+        end
+    elseif typeof(G1) <: TranslatingGimbalGroup
+        return false
+    elseif typeof(G1) <: IdentityGroup
+        return true
+    end
+
+    return false
+end
+
+function Base.:(==)(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacementGroup)
+    return typeof(G1) == typeof(G2) && G1.defining_object == G2.defining_object
+end
+
+function Base.:(<=)(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacementGroup)
+    return is_subgroup(G1, G2) || G1 == G2
+end
 
 
 abstract type AbstractDisplacementGroupElem{S,T<:Real} <: AbstractAlgebra.GroupElem end
