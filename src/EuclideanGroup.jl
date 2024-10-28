@@ -84,7 +84,9 @@ struct PrismaticGroup{T<:Real} <: Abstract3dDisplacementGroup{T}
     function PrismaticGroup(axis::Line{3,T}=Line(Point(0, 0, 0), Point(1, 0, 0))) where {T<:Real}
         d = 3
         dof = 1
-        new{T}(d, dof, axis)
+        # translate axis to a normal form: axis is a line that passes through the origin and the points of axis have distance 1.
+        ax = Line(Point(0, 0, 0), Point(normalize(axis.points[2] - axis.points[1])))
+        new{T}(d, dof, ax)
     end
 end
 
@@ -133,7 +135,9 @@ struct PlanarTranslationGroup{T<:Real} <: Abstract3dDisplacementGroup{T}
     function PlanarTranslationGroup(plane::Plane{3,T}=Plane(Point(0, 0, 0), Point(0, 1, 0), Point(0, 0, 1))) where {T<:Real}
         d = 3
         dof = 2
-        new{T}(d, dof, plane)
+        # translate plane to a normal form: plane is a plane that passes through the origin and the points of plane have distance 1.
+        p = Plane(Point(0, 0, 0), Point(normalize(plane.points[2] - plane.points[1])), Point(normalize(plane.points[3] - plane.points[1])))
+        new{T}(d, dof, p)
     end
 end
 
@@ -180,6 +184,8 @@ struct PlanarSlidingGroup{T<:Real} <: Abstract3dDisplacementGroup{T}
     function PlanarSlidingGroup(plane::Plane{3,T}=Plane(Point(0, 0, 0), Point(0, 1, 0), Point(0, 0, 1))) where {T<:Real}
         d = 3
         dof = 3
+        # translate plane to a normal form: plane is a plane that passes through the origin and the points of plane have distance 1.
+        p = Plane(Point(0, 0, 0), Point(normalize(plane.points[2] - plane.points[1])), Point(normalize(plane.points[3] - plane.points[1])))
         return new{T}(d, dof, plane)
     end
 end
@@ -210,6 +216,8 @@ struct TranslatingScrewGroup{T<:Real} <: Abstract3dDisplacementGroup{T}
     function TranslatingScrewGroup(axis::Line{3,T}=Line(Point(0, 0, 0), Point(1, 0, 0)), pitch::Real=1) where {T<:Real}
         d = 3
         dof = 3
+        # translate axis to a normal form: axis is a line that passes through the origin and the points of axis have distance 1.
+        ax = Line(Point(0, 0, 0), Point(normalize(axis.points[2] - axis.points[1])))
         return new{T}(d, dof, axis, pitch)
     end
 end
@@ -226,6 +234,8 @@ struct TranslatingGimbalGroup{T<:Real} <: Abstract3dDisplacementGroup{T}
     function TranslatingGimbalGroup(axis::Line{3,T}=Line(Point(0, 0, 0), Point(1, 0, 0))) where {T<:Real}
         d = 3
         dof = 4
+        # translate axis to a normal form: axis is a line that passes through the origin and the points of axis have distance 1.
+        ax = Line(Point(0, 0, 0), Point(normalize(axis.points[2] - axis.points[1])))
         return new{T}(d, dof, axis)
     end
 end
