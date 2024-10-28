@@ -323,30 +323,14 @@ function is_subgroup(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacement
     return false
 end
 
+function Base.:(<)(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacementGroup)
+    return is_subgroup(G1, G2)
+end
+
 function Base.:(==)(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacementGroup)
     return typeof(G1) == typeof(G2) && G1.defining_object == G2.defining_object
 end
 
 function Base.:(<=)(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacementGroup)
-    return is_subgroup(G1, G2) || G1 == G2
+    return G1 < G2 || G1 == G2
 end
-
-
-abstract type AbstractDisplacementGroupElem{S,T<:Real} <: AbstractAlgebra.GroupElem end
-
-struct DisplacementGroupElem{N,T<:Real} <: AbstractDisplacementGroupElem{N,T}
-    # parent::DisplacementGroup{N,T}
-    mat::Matrix{T}
-
-    function DisplacementGroupElem(group::AbstractDisplacementGroup{S,T}, mat::Matrix{T}) where {S,T<:Real}
-        d = group.d
-        @assert mat[d+1, d+1] == one(T) && det(mat[1:d, 1:d]) ≈ one(T) "mat must be in SE($d)."
-
-        m = SMatrix{group.d + 1,group.d + 1}(mat)
-        new{S,T}(group, m)
-    end
-end
-
-Base.parent(g::DisplacementGroupElem) = g.parent
-
-# (G::AbstractDisplacementGroup)(mat::Matrix{<:Real}) = DisplacementGroupElem(G, mat)
