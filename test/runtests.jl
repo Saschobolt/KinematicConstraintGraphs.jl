@@ -30,6 +30,8 @@ p3 = Plane(Point(rand(3)), Point(rand(3)), Point(rand(3))) # random plane in 3D
 l3 = Line(Point(rand(3)), Point(rand(3))) # random line in 3D
 l4 = Line(Point(0.0, 0, 1), Point(1, 0, 1)) # line parallel to l1
 p4 = Plane(Point(0.0, 0, 2), Point(1, 0, 2), Point(0, 1, 2)) # random plane parallel to l1
+l5 = Line(Point(0.0, 0.0, 3.0), Point(0, 1, 3)) # line parallel to p4 and orthogonal to l1
+z_axis = Line(Point(0.0, 0.0, 0.0), Point(0, 0, 1)) # z-axis
 
 pitch1 = rand() # random pitch for screw groups
 pitch2 = rand()
@@ -177,5 +179,29 @@ X_l4 = TranslatingGimbalGroup(l4)
 end
 
 @testset "intersection of displacement groups" begin
-
+    # see Table 4.3 in Thomas 1991
+    @test intersection(T_p1, T_p3) == PrismaticGroup(intersection(T_p1.defining_object, T_p3.defining_object))
+    @test intersection(T_p1, G_p3) == PrismaticGroup(intersection(T_p1.defining_object, G_p3.defining_object))
+    @test intersection(G_p1, G_p3) == PrismaticGroup(intersection(G_p1.defining_object, G_p3.defining_object))
+    @test intersection(Y_l1_p1, T_p4) == PrismaticGroup(l5)
+    @test intersection(Y_l1_p1, G_p4) == PrismaticGroup(l5)
+    @test intersection(Y_l1_p1, Y_l2_p2) == PrismaticGroup(z_axis)
+    @test intersection(Y_l1_p1, C_l2) == T_l2
+    @test intersection(C_l1, C_l4) == T_l1
+    @test intersection(T_p1, C_l2) == T_l2
+    @test intersection(T, C_l1) == T_l1
+    @test intersection(G_p2, C_l2) == T_l2
+    @test intersection(X_l3, C_l1) == T_l1
+    @test intersection(Y_l1_p1, C_l4) == H_l1_p1
+    @test intersection(G_p1, C_l1) == R_l1
+    @test intersection(S_x, G_p1) == RevolutionGroup(Line(x, x + [1.0, 0.0, 0.0]))
+    @test intersection(S_x, X_l1) == RevolutionGroup(Line(x, x + [1.0, 0.0, 0.0]))
+    @test intersection(S_x, S_y) == RevolutionGroup(Line(x, y))
+    @test intersection(Y_l1_p1, Y_l4_p2) == T_p1
+    @test intersection(Y_l1_p1, X_l3) == T_p1
+    @test intersection(G_p1, Y_l1_p1) == T_p1
+    @test intersection(G_p1, X_l3) == T_p1
+    @test intersection(G_p1, T) == T_p1
+    @test intersection(Y_l1_p1, T) == T_p1
+    @test intersection(X_l1, X_l3) == T
 end

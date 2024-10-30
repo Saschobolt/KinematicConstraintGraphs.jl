@@ -250,7 +250,7 @@ function parallel(l::Line{N}, p::Plane{N}) where {N}
     return size(nullspace(hcat(v, v1, v2)), 2) > 0
 end
 
-parallel(p::Plane{N}, l::Line{N}) where {N} = parallel{l,p}
+parallel(p::Plane{N}, l::Line{N}) where {N} = parallel(l, p)
 
 function parallel(p1::Plane{N}, p2::Plane{N}) where {N}
     v1 = p1.points[2] - p1.points[1]
