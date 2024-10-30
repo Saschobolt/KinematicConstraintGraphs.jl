@@ -186,7 +186,7 @@ struct PlanarSlidingGroup{T<:Real} <: Abstract3dDisplacementGroup{T}
         dof = 3
         # translate plane to a normal form: plane is a plane that passes through the origin and the points of plane have distance 1.
         p = Plane(Point(0, 0, 0), Point(normalize(plane.points[2] - plane.points[1])), Point(normalize(plane.points[3] - plane.points[1])))
-        return new{T}(d, dof, plane)
+        return new{T}(d, dof, p)
     end
 end
 
@@ -328,9 +328,207 @@ function Base.:(<)(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacementGr
 end
 
 function Base.:(==)(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacementGroup)
+    T1 = typeof(G1)
+    T2 = typeof(G2)
+
+    if (T1 <: Union{ScrewGroup,TranslatingScrewGroup} && T2 <: Union{ScrewGroup,TranslatingScrewGroup}) && G1.pitch != G2.pitch
+        return false
+    end
+
     return typeof(G1) == typeof(G2) && G1.defining_object == G2.defining_object
 end
 
 function Base.:(<=)(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacementGroup)
     return G1 < G2 || G1 == G2
+end
+
+function intersection(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacementGroup)
+    # if any of the two groups is the subgroup of the other return the smaller group
+    if G1 <= G2
+        return G1
+    elseif G2 <= G1
+        return G2
+    end
+
+    T1 = typeof(G1)
+    T2 = typeof(G2)
+
+    # lookup table for intersection of displacement groups according to table 4.3 in the paper by Frederico Thomas
+    if T1 <: PlanarTranslationGroup && T2 <: PlanarTranslationGroup
+        # prismatic group along the intersection of the planes
+        return PrismaticGroup(Line(intersection(G1.defining_object, G2.defining_object)))
+    elseif (T1 <: PlanarTranslationGroup && G2 <: PlanarSlidingGroup) || (T2 <: PlanarTranslationGroup && G1 <: PlanarSlidingGroup)
+        # prismatic group along the intersection of the planes
+        return PrismaticGroup(Line(intersection(G1.defining_object, G2.defining_object)))
+    elseif T1 <: PlanarSlidingGroup && T2 <: PlanarSlidingGroup
+        # prismatic group along the intersection of the planes
+        return PrismaticGroup(Line(intersection(G1.defining_object, G2.defining_object)))
+    elseif T1 <: TranslatingScrewGroup && T2 <: PlanarTranslationGroup
+        # prismatic translation group along a direction that is parallel to the plane of the translation group and perpendicular to the axis of the screw group
+        # is a prismatic group as the case where plane and axis are perpendicular is caught by G2 being a subgroup of G1.
+        axis1 = G1.defining_object
+        plane2 = G2.defining_object
+
+        v_screw = axis1.points[2] - axis1.points[1]
+        v_plane1 = plane2.points[2] - plane2.points[1]
+        v_plane2 = plane2.points[3] - plane2.points[1]
+
+        n = nullspace(transpose(v_screw)) # translation space of the plane perpendicular to the screw axis
+        @assert size(n, 2) == 2 # sanity check: n should span a plane
+        m = hcat(v_plane1, v_plane2, n)
+        @assert size(nullspace(m), 2) == 1 # sanity check: intersections of two non identical planes is a line
+        coeffs = nullspace(m)[1:2, :] # coeffs of the linear combination of the vectors v_plane1, v_plane2 that are orthogonal to the screw axis
+
+        l = Line(Point(0, 0, 0), Point(coeffs[1] * v_plane1 + coeffs[2] * v_plane2))
+
+        return PrismaticGroup(l)
+    elseif T1 <: PlanarTranslationGroup && T2 <: TranslatingScrewGroup
+        # reversed case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: TranslatingScrewGroup && T2 <: PlanarSlidingGroup
+        # case distinction if the direction of the screw axis is orthogonal to the direction of the plane of the sliding group
+        if orthogonal(G1.defining_object, G2.defining_object)
+            # translation group along the plane of the sliding group
+            return PlanarTranslationGroup(G2.defining_object)
+        elseif !orthogonal(G1.defining_object, G2.defining_object)
+            # translation group along a line that is perpendicular to the axis of the screw group and parallel to the plane of the sliding group
+            plane = G2.defining_object
+            return intersection(G1, PlanarTranslationGroup(plane))
+        end
+    elseif T1 <: PlanarSlidingGroup && T2 <: TranslatingScrewGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: TranslatingScrewGroup && T2 <: TranslatingScrewGroup
+        # prismatic translation group along a direction that is perpendicular to the rotation axes of both screw groups
+        axis1 = G1.defining_object
+        axis2 = G2.defining_object
+        v1 = axis1.points[2] - axis1.points[1]
+        v2 = axis2.points[2] - axis2.points[1]
+        v = cross(v1, v2)
+        return PrismaticGroup(Line(Point(0, 0, 0), Point(v)))
+    elseif T1 <: TranslatingScrewGroup && T2 <: CylindricalGroup
+        # case distinction if the direction of the screw axis is parallel to the direction of the axis of the cylindrical group or if they are perpendicular. If they are neither the intersection is trivial.
+        if parallel(G1.defining_object, G2.defining_object)
+            # screw group along the common axis with the pitch of the translating screw group
+            return ScrewGroup(G1.defining_object, G1.pitch)
+        elseif orthogonal(G1.defining_object, G2.defining_object)
+            # translation group along the direction of the cylindrical group
+            return PrismaticGroup(G2.defining_object)
+        end
+    elseif T1 <: CylindricalGroup && T2 <: TranslatingScrewGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: CylindricalGroup && T2 <: CylindricalGroup
+        # if the axes are parallel (but not equal), the intersection is the translation group along the common axis
+        if parallel(G1.defining_object, G2.defining_object)
+            return PrismaticGroup(G1.defining_object)
+        end
+    elseif T1 <: PlanarTranslationGroup && T2 <: CylindricalGroup
+        # if the plane and the axis are parallel the intersection is the translation group along the axis
+        if parallel(G1.defining_object, G2.defining_object)
+            return PrismaticGroup(G2.defining_object)
+        end
+    elseif T1 <: CylindricalGroup && T2 <: PlanarTranslationGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: SpatialTranslationGroup && T2 <: CylindricalGroup
+        # translation group along the axis of the cylindrical group
+        return PrismaticGroup(G2.defining_object)
+    elseif T1 <: CylindricalGroup && T2 <: SpatialTranslationGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: PlanarSlidingGroup && T2 <: CylindricalGroup
+        # if the plane and the axis are parallel the intersection is the translation group along the axis
+        if parallel(G1.defining_object, G2.defining_object)
+            return PrismaticGroup(G2.defining_object)
+        end
+    elseif T1 <: CylindricalGroup && T2 <: PlanarSlidingGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: TranslatingGimbalGroup && T2 <: CylindricalGroup
+        # if the axes are not parallel (which is the case as otherwise G2 <= G1) the intersection is the translation group along the axis of the cylindrical group
+        return PrismaticGroup(G2.defining_object)
+    elseif T1 <: CylindricalGroup && T2 <: TranslatingGimbalGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: SphericalRotationGroup && T2 <: CylindricalGroup
+        # if the point is on the axis of the cylindrical group the intersection is the rotation group along the axis
+        if G1.defining_object in G2.defining_object
+            return RevolutionGroup(G2.defining_object)
+        end
+    elseif T1 <: CylindricalGroup && T2 <: SphericalRotationGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: SphericalRotationGroup && T2 <: PlanarSlidingGroup
+        # revolution group around an axis that contains the defining point of the spherical group and that is perependicular to the plane of the sliding group
+        plane = G2.defining_object
+        n = normal_vec(plane)
+        p = G1.defining_object
+        return RevolutionGroup(Line(p, p + n))
+    elseif T1 <: PlanarSlidingGroup && T2 <: SphericalRotationGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: SphericalRotationGroup && T2 <: TranslatingGimbalGroup
+        # revolution group around an axis that contains the defining point of the spherical group and that is parallel to the axis of the gimbal group
+        axis = G2.defining_object
+        v = axis.points[2] - axis.points[1]
+        p = G1.defining_object
+        return RevolutionGroup(Line(p, p + v))
+    elseif T1 <: TranslatingGimbalGroup && T2 <: SphericalRotationGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: SphericalRotationGroup && T2 <: SphericalRotationGroup
+        # revolution group around the axis spanned by the two defining points of the spherical groups
+        return RevolutionGroup(Line(G1.defining_object, G2.defining_object))
+    elseif T1 <: TranslatingScrewGroup && T2 <: TranslatingScrewGroup
+        # if the groups have different pitch, but parallel axes the intersection is the planar translation group along the plane that is perpendicular to the axes
+        if G1.pitch != G2.pitch && parallel(G1.defining_object, G2.defining_object)
+            v = G1.defining_object.points[2] - G1.defining_object.points[1]
+            b = nullspace(transpose(v)) # base of translation space of plane with normal vector v
+            @assert size(b, 2) == 2 # sanity check: b should span a plane
+            return PlanarTranslationGroup(Plane(Point(0, 0, 0), Point(b[:, 1]), Point(b[:, 2])))
+        end
+    elseif T1 <: TranslatingScrewGroup && T2 <: TranslatingGimbalGroup
+        # if the defining axes are not parallel the intersection is planar translation group along the plane perpendicular to the axis of the screw group
+        if !parallel(G1.defining_object, G2.defining_object)
+            l = G1.defining_object
+            v = l.points[2] - l.points[1]
+            b = nullspace(transpose(v)) # base of translation space of plane with normal vector v
+            @assert size(b, 2) == 2 # sanity check: b should span a plane
+            return PlanarTranslationGroup(Plane(Point(0, 0, 0), Point(b[:, 1]), Point(b[:, 2])))
+        end
+    elseif T1 <: TranslatingGimbalGroup && T2 <: TranslatingScrewGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: PlanarSlidngGroup && T2 <: TranslatingGimbalGroup
+        # if the plane and the axis are not orthogonal, the intersection is the translation group along the plane
+        if !orthogonal(G1.defining_object, G2.defining_object)
+            return PlanarTranslationGroup(G1.defining_object)
+        end
+    elseif T1 <: TranslatingGimbalGroup && T2 <: PlanarSlidingGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: PlanarSlidingGroup && T2 <: SpatialTranslationGroup
+        # translation group along the plane
+        return PlanarTranslationGroup(G1.defining_object)
+    elseif T1 <: SpatialTranslationGroup && T2 <: PlanarSlidingGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: TranslatingScrewGroup && T2 <: SpatialTranslationGroup
+        # translation group along the plane perpendicular to the screw axis
+        l = G1.defining_object
+        v = l.points[2] - l.points[1]
+        b = nullspace(transpose(v)) # base of translation space of plane with normal vector v
+        @assert size(b, 2) == 2 # sanity check: b should span a plane
+        return PlanarTranslationGroup(Plane(Point(0, 0, 0), Point(b[:, 1]), Point(b[:, 2])))
+    elseif T1 <: SpatialTranslationGroup && T2 <: TranslatingScrewGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: TranslatingGimbalGroup && T2 <: TranslatinGimbalGroup
+        # spatial translation group
+        return SpatialTranslationGroup()
+    end
+
+    # if non of the conditions above apply the intersection is trivial.
+    return IdentityGroup(G1.d)
 end

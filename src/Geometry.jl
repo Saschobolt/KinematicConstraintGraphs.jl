@@ -30,7 +30,7 @@ function Point(coords::AbstractVector{<:Real})
 end
 
 function Point(coords...)
-    return Point(collect(coords))
+    return Point(collect(promote(coords...)))
 end
 
 # promotion and conversion
@@ -161,7 +161,7 @@ function intersection(s1::AbstractGeometricSpan, s2::AbstractGeometricSpan)
     t1 = basis_translation_space(s1)
     t2 = basis_translation_space(s2)
 
-    A = hcat(t1, -t2) # matrix that defines linear system of equations for two spans to intersect. 
+    A = hcat(t1, -t2) # matrix that defines linear system of equations for two spans to intersect.
     A_ind = indcols(A) # For the system of eqs we take the independet columns of A to avoid a LinearAlgebra.SingularException when solving the system.
     b = p2 - p1 # right hand side of system of linear equations
     sol = A_ind \ b #  As the cols of t1 are linearly independent, A_ind has more than d1 coumns and the first d1 entries of sol describe a point in s1 by p1 + t1 * sol[1:d1].
