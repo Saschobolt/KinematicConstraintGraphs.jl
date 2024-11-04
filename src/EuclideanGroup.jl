@@ -544,6 +544,8 @@ function intersection(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacemen
     return IdentityGroup(G1.d)
 end
 
+Base.inv(G::AbstractDisplacementGroup) = G
+
 
 ########### composition of DisplacementGroups
 mutable struct DisplacementGroupComposition{N}
@@ -573,6 +575,16 @@ function reduce!(comp::DisplacementGroupComposition{N}) where {N}
 
     return comp
 end
+
+function is_trivial!(comp::DisplacementGroupComposition)
+    return length(reduce!(comp).factors) == 1
+end
+
+function Base.inv!(comp::DisplacementGroupComposition)
+    reverse!(map!(f -> inv(f), comp.factors, comp.factors))
+    return comp
+end
+Base.inv(comp::DisplacementGroupComposition) = DisplacementGroupComposition(inv.(reverse(comp.factors)))
 
 Base.:(==)(comp1::DisplacementGroupComposition{N}, comp2::DisplacementGroupComposition{N}) where {N} = (reduce!(deepcopy(comp1)).factors == reduce!(deepcopy(comp2)).factors)
 
