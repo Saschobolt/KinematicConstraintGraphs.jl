@@ -580,7 +580,7 @@ function is_trivial!(comp::DisplacementGroupComposition)
     return length(reduce!(comp).factors) == 1
 end
 
-function Base.inv!(comp::DisplacementGroupComposition)
+function inv!(comp::DisplacementGroupComposition)
     reverse!(map!(f -> inv(f), comp.factors, comp.factors))
     return comp
 end
