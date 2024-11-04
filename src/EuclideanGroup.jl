@@ -543,3 +543,289 @@ function intersection(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacemen
     # if non of the conditions above apply the intersection is trivial.
     return IdentityGroup(G1.d)
 end
+
+
+########### composition of DisplacementGroups
+mutable struct DisplacementGroupComposition{N}
+    factors::Vector{<:AbstractDisplacementGroup{N}}
+
+    function DisplacementGroupComposition(groups::AbstractVector{<:AbstractDisplacementGroup{N}}) where {N}
+        return new{N}(groups)
+    end
+end
+
+# reduce a composition of displacement group to a regular representation with the minimum number of trivially intersecting factors
+function reduce!(comp::DisplacementGroupComposition{N}) where {N}
+    if length(comp.factors) == 1
+        return comp
+    end
+
+    # Go through factors from left to right. If any factors have non trivial intersection, compute their composition and get regular presentation. 
+    # Call the function recursively on this new presentation of the composition.
+    for i in 1:length(comp.factors)-1
+        G1 = comp.factors[i]
+        G2 = comp.factors[i-1]
+        if intersection(G1, G2) != IdentityGroup(N)
+            comp.factors = vcat(comp.factors[1:i-1], (G1 * G2).factors, comp.factors[i+1:end])
+            return reduce!(comp)
+        end
+    end
+
+    return comp
+end
+
+Base.:(==)(comp1::DisplacementGroupComposition{N}, comp2::DisplacementGroupComposition{N}) where {N} = (reduce!(deepcopy(comp1)).factors == reduce!(deepcopy(comp2)).factors)
+
+# regular presentation of composition of two DisplacementGroups, i.e. factor following each other have trivial intersections.
+function composition(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacementGroup)
+    if G1 <= G2
+        return DisplacementGroupComposition([G2])
+    elseif G2 <= G1
+        return DisplacementGroupComposition([G1])
+    end
+
+    T1 = typeof(G1)
+    T2 = typeof(G2)
+
+    # cases where the two groups don't intersect trivially. See table 4.3 in Thomas 1991
+    if T1 <: PlanarTranslationGroup && T2 <: PlanarTranslationGroup
+        # Spatial translation group
+        return DisplacementGroupComposition([SpatialTranslationGroup()])
+    elseif T1 <: PlanarTranslationGroup && T2 <: PlanarSlidingGroup
+        # translating gimbal with axis orthogonal to plane of the sliding group
+        v = normal_vec(G2.defining_object)
+        return DisplacementGroupComposition([TranslatingGimbalGroup(Line(Point(0, 0, 0), Point(v)))])
+    elseif T2 <: PlanarTranslationGroup && T1 <: PlanarSlidingGroup
+        # reverse case of above
+        return composition(G2, G1)
+    elseif T1 <: PlanarSlidingGroup && T2 <: PlanarSlidingGroup
+        # R_{u_0} T R_{u_1}, where u_0 is orthogonal to first plane and u_1 is orthogonal to the second plane
+        u0 = normal_vec(G1.defining_object)
+        u1 = normal_vec(G2.defining_object)
+        return DisplacementGroupComposition([RevolutionGroup(Line(Point(0, 0, 0), Point(u0))), SpatialTranslationGroup(), RevolutionGroup(Line(Point(0, 0, 0), Point(u1)))])
+    elseif T1 <: TranslatingScrewGroup && T2 <: PlanarTranslationGroup
+        # translating gimbal with same axis as screw group
+        return DisplacementGroupComposition([TranslatingGimbalGroup(G1.defining_object)])
+    elseif T1 <: PlanarTranslationGroup && T2 <: TranslatingScrewGroup
+        # reversed case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: TranslatingScrewGroup && T2 <: PlanarSlidingGroup
+        # case distinction if the direction of the screw axis is orthogonal to the direction of the plane of the sliding group
+        if orthogonal(G1.defining_object, G2.defining_object)
+            # translating gimbal with axis of screw group
+            return DisplacementGroupComposition([TranslatingGimbalGroup(G1.defining_object)])
+        elseif !orthogonal(G1.defining_object, G2.defining_object)
+            # X_{v_0} R_{u_0} where v_0 is axis of the screw group and u_0 is orthogonal to plane of sliding group
+            v0 = G1.defining_object
+            u0 = Line(Point(0, 0, 0), Point(normal_vec(G2.defining_object)))
+            return DisplacementGroupComposition([TranslatingGimbalGroup(v0), RevolutionGroup(u0)])
+        end
+    elseif T1 <: PlanarSlidingGroup && T2 <: TranslatingScrewGroup
+        # reverse case of the case before
+        if orthogonal(G1.defining_object, G2.defining_object)
+            return composition(G2, G1)
+        elseif !orthogonal(G1.defining_object, G2.defining_object)
+            # R_{u_0} X_{v_0} where v_0 is axis of the screw group and u_0 is orthogonal to plane of sliding group
+            v0 = G2.defining_object
+            u0 = Line(Point(0, 0, 0), Point(normal_vec(G1.defining_object)))
+            return DisplacementGroupComposition([RevolutionGroup(u0), TranslatingGimbalGroup(v0)])
+        end
+    elseif T1 <: TranslatingScrewGroup && T2 <: TranslatingScrewGroup
+        if !parallel(G1.defining_object, G2.defining_object)
+            # R_{u_0} T R_{u_1} where u_0 is axis of G1 and u_1 is axis of G2
+            u0 = G1.defining_object
+            u1 = G2.defining_object
+            return DisplacementGroupComposition([RevolutionGroup(u0), SpatialTranslationGroup(), RevolutionGroup(u1)])
+        elseif G1.pitch != G2.pitch
+            # translating gimbal group with same axis as one of the screw groups
+            return DisplacementGroupComposition([TranslatingGimbalGroup(G1.defining_object)])
+        end
+    elseif T1 <: TranslatingScrewGroup && T2 <: CylindricalGroup
+        # case distinction if the direction of the screw axis is parallel to the direction of the axis of the cylindrical group or if they are perpendicular. If they are neither the intersection is trivial.
+        if parallel(G1.defining_object, G2.defining_object)
+            # translating gimbal group with the axis of any of the two groups
+            return DisplacementGroupComposition([TranslatingGimbalGroup(G1.defining_object)])
+        elseif orthogonal(G1.defining_object, G2.defining_object)
+            # Y_{v_0, p_0} R_{u_0} where v_0 is the axis of the screw group, p_0 is the pitch of the screw group and u_0 is the axis of the cylindrical group
+            v0 = G1.defining_object
+            p0 = G1.pitch
+            u0 = G2.defining_object
+            return DisplacementGroupComposition([TranslatingScrewGroup(v0, p0), RevolutionGroup(u0)])
+        end
+    elseif T1 <: CylindricalGroup && T2 <: TranslatingScrewGroup
+        # reverse case of the case before
+        if parallel(G1.defining_object, G2.defining_object)
+            return composition(G2, G1)
+        elseif orthogonal(G1.defining_object, G2.defining_object)
+            # R_{u_0} Y_{v_0, p_0} where v_0 is the axis of the screw group, p_0 is the pitch of the screw group and u_0 is the axis of the cylindrical group
+            v0 = G2.defining_object
+            p0 = G2.pitch
+            u0 = G1.defining_object
+            return DisplacementGroupComposition([RevolutionGroup(u0), TranslatingScrewGroup(v0, p0)])
+        end
+    elseif T1 <: CylindricalGroup && T2 <: CylindricalGroup
+        # if the axes are parallel (but not equal), the composition is C_u0 R_u1 where u0 is the axis of the first and u1 the axis of the second group
+        if parallel(G1.defining_object, G2.defining_object)
+            u0 = G1.defining_object
+            u1 = G2.defining_object
+            return DisplacementGroupComposition([CylindricalGroup(u0), RevolutionGroup(u1)])
+        end
+    elseif T1 <: PlanarTranslationGroup && T2 <: CylindricalGroup
+        # if the plane and the axis are parallel the composition is T_P0 R_u0 where P0 is the plane of the translation group and u0 is the axis of the cylindrical group
+        if parallel(G1.defining_object, G2.defining_object)
+            P0 = G1.defining_object
+            u0 = G2.defining_object
+            return DisplacementGroupComposition([PlanarTranslationGroup(P0), RevolutionGroup(u0)])
+        end
+    elseif T1 <: CylindricalGroup && T2 <: PlanarTranslationGroup
+        # reverse case of the case before
+        if parallel(G1.defining_object, G2.defining_object)
+            P0 = G2.defining_object
+            u0 = G1.defining_object
+            return DisplacementGroupComposition([RevolutionGroup(u0), PlanarTranslationGroup(P0)])
+        end
+    elseif T1 <: SpatialTranslationGroup && T2 <: CylindricalGroup
+        # X_v0 where v0 is the axis of the cylindrical group
+        v0 = G2.defining_object
+        return DisplacementGroupComposition([TranslatingGimbalGroup(v0)])
+    elseif T1 <: CylindricalGroup && T2 <: SpatialTranslationGroup
+        # reverse case of the case before
+        return composition(G2, G1)
+    elseif T1 <: PlanarSlidingGroup && T2 <: CylindricalGroup
+        # if the plane and the axis are parallel the composition is G_P0 R_u0 where P0 is the plane of the sliding group and u0 is the axis of the cylindrical group
+        if parallel(G1.defining_object, G2.defining_object)
+            P0 = G1.defining_object
+            u0 = G2.defining_object
+            return DisplacementGroupComposition([PlanarSlidingGroup(P0), RevolutionGroup(u0)])
+        elseif orthogonal(G1.defining_object, G2.defining_object)
+            # X_v0 where v0 is orthogonal to P0
+            v0 = normal_vec(G1.defining_object)
+            return DisplacementGroupComposition([TranslatingGimbalGroup(v0)])
+        end
+    elseif T1 <: CylindricalGroup && T2 <: PlanarSlidingGroup
+        # reverse case of the case before
+        if parallel(G1.defining_object, G2.defining_object)
+            P0 = G2.defining_object
+            u0 = G1.defining_object
+            return DisplacementGroupComposition([PlanarSlidingGroup(P0), RevolutionGroup(u0)])
+        elseif orthogonal(G1.defining_object, G2.defining_object)
+            return composition(G2, G1)
+        end
+    elseif T1 <: TranslatingGimbalGroup && T2 <: CylindricalGroup
+        # X_v0 R_u0 where v0 is axis of the gimbal group and u0 is axis of the cylindrical group
+        v0 = G1.defining_object
+        u0 = G2.defining_object
+        return DisplacementGroupComposition([TranslatingGimbalGroup(v0), RevolutionGroup(u0)])
+    elseif T1 <: CylindricalGroup && T2 <: TranslatingGimbalGroup
+        # reverse case of the case before
+        v0 = G2.defining_object
+        u0 = G1.defining_object
+        return DisplacementGroupComposition([RevolutionGroup(u0), TranslatingGimbalGroup(v0)])
+    elseif T1 <: SphericalRotationGroup && T2 <: CylindricalGroup
+        # S_x T_u0 where x is the point of the rotation group and u0 the axis of the cylindrical group, if x is in u_0
+        x = G1.defining_object
+        u0 = G2.defining_object
+        if x in u0
+            return DisplacementGroupComposition([SphericalRotationGroup(x), PrismaticGroup(u0)])
+        end
+    elseif T1 <: CylindricalGroup && T2 <: SphericalRotationGroup
+        # reverse case of the case before
+        x = G2.defining_object
+        u0 = G1.defining_object
+        if x in u0
+            return DisplacementGroupComposition([PrismaticGroup(u0), SphericalRotationGroup(x)])
+        end
+    elseif T1 <: SphericalRotationGroup && T2 <: PlanarSlidingGroup
+        # S_x T_P0 where x is the point of the rotation group and P0 the plane of the sliding group
+        x = G1.defining_object
+        P0 = G2.defining_object
+        return DisplacementGroupComposition([SphericalRotationGroup(x), PlanarTranslationGroup(P0)])
+    elseif T1 <: PlanarSlidingGroup && T2 <: SphericalRotationGroup
+        # reverse case of the case before
+        x = G2.defining_object
+        P0 = G1.defining_object
+        return DisplacementGroupComposition([PlanarTranslationGroup(P0), SphericalRotationGroup(x)])
+    elseif T1 <: SphericalRotationGroup && T2 <: TranslatingGimbalGroup
+        # SE(3)
+        return SpecialEuclideanGroup(3)
+    elseif T1 <: TranslatingGimbalGroup && T2 <: SphericalRotationGroup
+        # reverse case of the case before
+        return intersection(G2, G1)
+    elseif T1 <: SphericalRotationGroup && T2 <: SphericalRotationGroup
+        # S_x R_u0 R_u1 where x is the defining point of G1 and the defining point of G2 is in both axis u1 and u2
+        x = G1.defining_object
+        y = G2.defining_object
+        u0 = Line(y, y + [1, 0, 0])
+        u1 = Line(y, y + [0, 1, 0])
+        return DisplacementGroupComposition([SphericalRotationGroup(x), RevolutionGroup(u0), RevolutionGroup(u1)])
+    elseif T1 <: TranslatingScrewGroup && T2 <: TranslatingGimbalGroup
+        # if the defining axes are not parallel the composition is X_v0 R_u1 where v0 is the axis of the screw group and u1 is the axis of the Gimbal group
+        if !parallel(G1.defining_object, G2.defining_object)
+            v0 = G1.defining_object
+            u1 = G2.defining_object
+            return DisplacementGroupComposition([TranslatingGimbalGroup(v0), RevolutionGroup(u1)])
+        end
+    elseif T1 <: TranslatingGimbalGroup && T2 <: TranslatingScrewGroup
+        # reverse case of the case before
+        if !parallel(G1.defining_object, G2.defining_object)
+            v0 = G2.defining_object
+            u1 = G1.defining_object
+            return DisplacementGroupComposition([RevolutionGroup(u1), TranslatingGimbalGroup(v0)])
+        end
+    elseif T1 <: PlanarSlidingGroup && T2 <: TranslatingGimbalGroup
+        # if the plane and the axis are not orthogonal, the composition is R_u0 T R_u1 where u0 is orthogonal to the plane and u1 is parallel to the axis of the gimbal group
+        if !orthogonal(G1.defining_object, G2.defining_object)
+            P0 = G1.defining_object
+            v1 = G2.defining_object
+            u1 = v1
+            u0 = Line(Point(0, 0, 0), Point(normal_vec(P0)))
+            return DisplacementGroupComposition([RevolutionGroup(u0), SpatialTranslationGroup(), RevolutionGroup(u1)])
+        end
+    elseif T1 <: TranslatingGimbalGroup && T2 <: PlanarSlidingGroup
+        # reverse case of the case before
+        if !orthogonal(G1.defining_object, G2.defining_object)
+            P0 = G2.defining_object
+            v1 = G1.defining_object
+            u1 = v1
+            u0 = Line(Point(0, 0, 0), Point(normal_vec(P0)))
+            return DisplacementGroupComposition([RevolutionGroup(u1), SpatialTranslationGroup(), RevolutionGroup(u0)])
+        end
+    elseif T1 <: PlanarSlidingGroup && T2 <: SpatialTranslationGroup
+        # X_v0 where v0 is orthogonal to the plane of the sliding group
+        v0 = Line(Point(0, 0, 0), normal_vec(G2.defining_object))
+        return DisplacementGroupComposition([TranslatingGimbalGroup(v0)])
+    elseif T1 <: SpatialTranslationGroup && T2 <: PlanarSlidingGroup
+        # reverse case of the case before
+        return composition(G2, G1)
+    elseif T1 <: TranslatingScrewGroup && T2 <: SpatialTranslationGroup
+        # X_v0 where v0 is the axis of the screw group
+        v0 = G1.defining_object
+        return DisplacementGroupComposition(TranslatingGimbalGroup(v0))
+    elseif T1 <: SpatialTranslationGroup && T2 <: TranslatingScrewGroup
+        # reverse case of the case before
+        return composition(G2, G1)
+    elseif T1 <: TranslatingGimbalGroup && T2 <: TranslatingGimbalGroup
+        # R_u0 T R_u1 where u0 is parallel to the axis of G1 and u1 is parallel to the axis of G2
+        u0 = G1.defining_object
+        u1 = G2.defining_object
+        return DisplacementGroupComposition([RevolutionGroup(u0), SpatialTranslationGroup, RevolutionGroup(u1)])
+    end
+
+    # otherwise the intersection of the groups is empty
+    return DisplacementGroupComposition([G1, G2])
+end
+
+Base.:*(G1::Abstract3dDisplacementGroup, G2::Abstract3dDisplacementGroup) = composition(G1, G2)
+
+# composition of DisplacementGroup and DisplacementGroupComposition
+function composition(comp::DisplacementGroupComposition{N}, G::AbstractDisplacementGroup{N}) where {N}
+    return reduce!(DisplacementGroupComposition(push!(deepcopy(comp.factors), G)))
+end
+
+Base.:*(comp::DisplacementGroupComposition{N}, G::AbstractDisplacementGroup{N}) where {N} = composition(comp, G)
+
+function composition(G::AbstractDisplacementGroup{N}, comp::DisplacementGroupComposition{N}) where {N}
+    return reduce!(DisplacementGroupComposition(pushfirst!(deepcopy(comp.factors), G)))
+end
+
+Base.:*(G::AbstractDisplacementGroup{N}, comp::DisplacementGroupComposition{N}) where {N} = composition(G, comp)
