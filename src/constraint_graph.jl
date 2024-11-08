@@ -80,6 +80,11 @@ function blocks(g::Union{Graphs.SimpleGraph,Graphs.SimpleDiGraph}) # TODO: impro
 end
 
 ####### filter constraints in kinematic constraint graph as in Thomas 1991 4.4.3
+"""
+    filter_constraints!(g::ConstraintGraph{N,T}) where {N,T<:Integer}
+
+Filter the constraints of the constraint graph g along the basis cycles of g. See Thomas 1991, section 4.4.3
+"""
 function filter_constraints!(g::ConstraintGraph{N,T}) where {N,T<:Integer}
     B = blocks(g.G)
     filter!(b -> length(b) > 1, B) # remove bridges from the constraint graph as those constraints do not propagate through the graph
@@ -157,4 +162,13 @@ function filter_constraints!(g::ConstraintGraph{N,T}) where {N,T<:Integer}
     end
 
     return g
+end
+
+#################### plotting of constraint graphs using GraphMakie
+function GraphMakie.graphplot(g::ConstraintGraph, kwargs...)
+    G = g.G
+    labels = repr.(g.constraints[e] for e in Graphs.edges(G))
+    f, ax, p = graphplot(G, elabels=labels, kwargs...)
+
+    return f, ax, p
 end

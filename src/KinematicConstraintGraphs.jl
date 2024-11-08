@@ -2,6 +2,7 @@ module KinematicConstraintGraphs
 
 import AbstractAlgebra
 import Graphs
+using GraphMakie
 using StaticArrays
 using LinearAlgebra
 # Write your package code here.
