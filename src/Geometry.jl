@@ -84,7 +84,7 @@ function GeometricSpan(points...)
     return GeometricSpan(collect(points))
 end
 
-Base.show(io::IO, s::GeometricSpan{N,T}) where {N,T<:Real} = print(io, "$(dim(s))-dim GeometricSpan(", ["$p, " for p in s.points[1:end-1]]..., s.points[end], ")")
+Base.show(io::IO, s::GeometricSpan{N,T}) where {N,T<:Real} = print(io, "$(dim(s))-dim GeometricSpan( ", s.points[1], ["$p, " for p in s.points[2:end]]..., " )")
 
 function Base.:(==)(s1::AbstractGeometricSpan, s2::AbstractGeometricSpan)
     d = dim(s1)

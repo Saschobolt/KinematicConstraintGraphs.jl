@@ -558,6 +558,8 @@ mutable struct DisplacementGroupComposition{N}
     end
 end
 
+Base.show(io::IO, comp::DisplacementGroupComposition) = print(io, comp.factors[1], [" ⋅ $(factor)" for factor in comp.factors[2:end]]...)
+
 # reduce a composition of displacement group to a regular representation with the minimum number of trivially intersecting factors
 function reduce!(comp::DisplacementGroupComposition{N}) where {N}
     if length(comp.factors) == 1
