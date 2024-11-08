@@ -45,6 +45,8 @@ All subtypes of AbstractDisplacementGroup must have the following fields:
 abstract type AbstractDisplacementGroup{N,T<:Real} <: AbstractAlgebra.Group end
 Abstract3dDisplacementGroup{T<:Real} = AbstractDisplacementGroup{3,T}
 
+Base.show(io::IO, G::AbstractDisplacementGroup{N,T}) where {N,T<:Real} = print(io, "$(typeof(G))( ", G.defining_object, " )")
+
 # identity group
 struct IdentityGroup{N,T<:Real} <: AbstractDisplacementGroup{N,T}
     d::Int

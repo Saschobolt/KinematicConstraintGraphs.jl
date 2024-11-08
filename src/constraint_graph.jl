@@ -15,6 +15,8 @@ end
 
 ConstraintGraph() = ConstraintGraph{3,Int}()
 
+Base.show(io::IO, g::ConstraintGraph{N,T}) where {N,T} = print(io, "{$(Graphs.nv(g.G)), $(Graphs.ne(g.G))} $T kinematic constraint graph in dimension $N")
+
 function Base.getindex(g::ConstraintGraph{N,T}, inds...) where {N,T<:Integer}
     F = getindex(g.G, inds...)
     constraints = Dict{Graphs.Edge{T},DisplacementGroupComposition{N}}()

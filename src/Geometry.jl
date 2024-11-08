@@ -33,6 +33,9 @@ function Point(coords...)
     return Point(collect(promote(coords...)))
 end
 
+# pretty printing
+Base.show(io::IO, p::Point{N,T}) where {N,T<:Real} = print(io, "Point{$T}", Tuple(p.coords))
+
 # promotion and conversion
 Base.convert(::Type{Point{N,T}}, p::Point{M,S}) where {M,N,T<:Real,S<:Real} = Point{N,T}(p.coords)
 Base.promote_rule(::Type{Point{N,T}}, ::Type{Point{N,S}}) where {N,T<:Real,S<:Real} = Point{N,promote_type(T, S)}
@@ -80,6 +83,8 @@ function GeometricSpan(points...)
 
     return GeometricSpan(collect(points))
 end
+
+Base.show(io::IO, s::GeometricSpan{N,T}) where {N,T<:Real} = print(io, "$(dim(s))-dim GeometricSpan(", ["$p, " for p in s.points[1:end-1]]..., s.points[end], ")")
 
 function Base.:(==)(s1::AbstractGeometricSpan, s2::AbstractGeometricSpan)
     d = dim(s1)
@@ -193,6 +198,9 @@ end
 Line(points::AbstractVector{Point}) = Line(GeometricSpan(points))
 Line(points...) = Line(GeometricSpan(points...))
 
+Base.show(io::IO, l::Line{N,T}) where {N,T<:Real} = print(io, "Line(", l.points[1], ", ", l.points[2], ")")
+
+
 ############ plane
 mutable struct Plane{N,T<:Real} <: AbstractGeometricSpan{N,T}
     points::SVector{3,Point{N,T}}
@@ -207,6 +215,8 @@ end
 
 Plane(points) = Plane(GeometricSpan(points))
 Plane(points...) = Plane(GeometricSpan(points...))
+
+Base.show(io::IO, p::Plane{N,T}) where {N,T<:Real} = print(io, "Plane(", p.points[1], ", ", p.points[2], ", ", p.points[3], ")")
 
 function normal_vec(p::Plane)
     v1 = p.points[2] - p.points[1]
