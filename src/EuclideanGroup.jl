@@ -562,13 +562,15 @@ function reduce!(comp::DisplacementGroupComposition{N}) where {N}
         return comp
     end
 
+    setdiff!(comp.factors, [IdentityGroup(N)])
+
     # Go through factors from left to right. If any factors have non trivial intersection, compute their composition and get regular presentation. 
     # Call the function recursively on this new presentation of the composition.
     for i in 1:length(comp.factors)-1
         G1 = comp.factors[i]
-        G2 = comp.factors[i-1]
+        G2 = comp.factors[i+1]
         if intersection(G1, G2) != IdentityGroup(N)
-            comp.factors = vcat(comp.factors[1:i-1], (G1 * G2).factors, comp.factors[i+1:end])
+            comp.factors = vcat(comp.factors[1:i-1], (G1 * G2).factors, comp.factors[i+2:end])
             return reduce!(comp)
         end
     end
@@ -841,3 +843,15 @@ function composition(G::AbstractDisplacementGroup{N}, comp::DisplacementGroupCom
 end
 
 Base.:*(G::AbstractDisplacementGroup{N}, comp::DisplacementGroupComposition{N}) where {N} = composition(G, comp)
+
+function composition(comp1::DisplacementGroupComposition, comp2::DisplacementGroupComposition)
+    return reduce!(DisplacementGroupComposition(vcat(comp1.factors, comp2.factors)))
+end
+
+Base.:*(comp1::DisplacementGroupComposition, comp2::DisplacementGroupComposition) = composition(comp1, comp2)
+
+intersection(comp::DisplacementGroupComposition{N}, G::AbstractDisplacementGroup{N}) where {N} = is_trivial!(comp) ? (return DisplacementGroupComposition([intersection(comp.factors[1], G)])) : (throw(ArgumentError("composition has to be trivial.")))
+
+intersection(G::AbstractDisplacementGroup{N}, comp::DisplacementGroupComposition{N}) where {N} = is_trivial!(comp) ? (return DisplacementGroupComposition([intersection(comp.factors[1], G)])) : (throw(ArgumentError("composition has to be trivial.")))
+
+intersection(comp1::DisplacementGroupComposition{N}, comp2::DisplacementGroupComposition{N}) where {N} = (is_trivial!(comp1) && is_trivial!(comp2)) ? (return DisplacementGroupComposition([intersection(comp1.factors[1], comp2.factors[1])])) : (throw(ArgumentError("compositions have to be trivial.")))
