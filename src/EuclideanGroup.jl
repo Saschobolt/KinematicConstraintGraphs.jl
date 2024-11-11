@@ -562,11 +562,12 @@ Base.show(io::IO, comp::DisplacementGroupComposition) = print(io, comp.factors[1
 
 # reduce a composition of displacement group to a regular representation with the minimum number of trivially intersecting factors
 function reduce!(comp::DisplacementGroupComposition{N}) where {N}
-    if length(comp.factors) == 1
+    setdiff!(comp.factors, [IdentityGroup(N)])
+
+    if length(comp.factors) == 0
+        comp.factors = [IdentityGroup(N)]
         return comp
     end
-
-    setdiff!(comp.factors, [IdentityGroup(N)])
 
     # Go through factors from left to right. If any factors have non trivial intersection, compute their composition and get regular presentation. 
     # Call the function recursively on this new presentation of the composition.
